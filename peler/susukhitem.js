@@ -1,3 +1,4 @@
+// Algoritma CRC16-CCITT (Poly: 0x1021, Init: 0xFFFF)
 function calculateCRC16(str) {
   let crc = 0xFFFF;
   for (let i = 0; i < str.length; i++) {
@@ -14,7 +15,7 @@ function calculateCRC16(str) {
   return crc.toString(16).toUpperCase().padStart(4, '0');
 }
 
-// Fungsi Parse TLV
+// Fungsi Parsing TLV (Tag-Length-Value)
 function parseTLV(qrisStr) {
   const tags = [];
   let pos = 0;
@@ -30,9 +31,11 @@ function parseTLV(qrisStr) {
   return tags;
 }
 
-// Fungsi Utama Pembuat Dynamic QRIS Payload
+// Fungsi Utama Generator Dynamic QRIS
 function generateDynamicQRIS(baseQr, amount) {
   let tags = parseTLV(baseQr.trim());
+  
+  // Hapus Tag 63 (CRC) dan Tag 54 (Amount lama jika ada)
   tags = tags.filter(item => item.tag !== '63' && item.tag !== '54');
 
   const amtStr = amount.toString();
@@ -42,6 +45,7 @@ function generateDynamicQRIS(baseQr, amount) {
     value: amtStr
   };
 
+  // Sisipkan Tag 54 setelah Tag 53 (Transaction Currency)
   const index53 = tags.findIndex(item => item.tag === '53');
   if (index53 !== -1) {
     tags.splice(index53 + 1, 0, tag54);
@@ -54,19 +58,21 @@ function generateDynamicQRIS(baseQr, amount) {
     }
   }
 
+  // Re-build Payload String
   let payload = "";
   tags.forEach(item => {
     const lenStr = item.len.toString().padStart(2, '0');
     payload += `${item.tag}${lenStr}${item.value}`;
   });
 
+  // Tambahkan Header CRC
   payload += "6304";
   const checksum = calculateCRC16(payload);
   return payload + checksum;
 }
 
 export default async function handler(req, res) {
-  // Izinkan CORS agar script browser kamu bisa akses
+  // Pengaturan CORS Header
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -81,9 +87,8 @@ export default async function handler(req, res) {
 
   try {
     const { amount } = req.body;
-
-    // Validasi input nominal
     const numericAmount = Number(amount);
+
     if (!numericAmount || numericAmount < 10000) {
       return res.status(400).json({ 
         success: false, 
@@ -91,13 +96,11 @@ export default async function handler(req, res) {
       });
     }
 
-    // Ambil string static dari Environment Variable Vercel (atau fallback hardcode di server)
+    // Mengambil dari Environment Variable / Fallback Static String
     const rawStaticQris = process.env.STATIC_QRIS || "00020101021126610014COM.GO-JEK.WWW01189360091430102013260210G0102013260303UMI51440014ID.CO.QRIS.WWW0215ID10243540049380303UMI5204581653033605802ID5916DCOMPANY, GAMING6013JAKARTA PUSAT61051031062070703A0163044950";
 
-    // Generate Payload Dynamic QRIS
     const dynamicPayload = generateDynamicQRIS(rawStaticQris, numericAmount);
 
-    // Kirim response kembali ke client
     return res.status(200).json({
       success: true,
       amount: numericAmount,
