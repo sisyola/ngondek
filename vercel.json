@@ -1,9 +1,0 @@
-{
-  "version": 2,
-  "routes": [
-    {
-      "src": "/peler/susukhitem",
-      "dest": "/peler/susukhitem.js"
-    }
-  ]
-}
